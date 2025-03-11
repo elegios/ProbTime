@@ -7,7 +7,7 @@ include "mexpr/lamlift.mc"
 lang ProbTimeCodegenBase = MExprAst + MExprLambdaLift + ProbTimeAst
   type PTCompileEnv = {
     ast : Expr,
-    llSolutions : Map Name LambdaLiftSolution,
+    llSolutions : Map Name FinalOrderedLamLiftSolution,
     aliases : Map Name PTType,
     consts : Map Name PTExpr,
     topVarEnv : Map String Name,

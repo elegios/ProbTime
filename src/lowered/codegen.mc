@@ -493,17 +493,8 @@ lang ProbTimeCodegenSystem =
   sem getCapturedTopLevelVars : Info -> PTCompileEnv -> Name -> [Expr]
   sem getCapturedTopLevelVars info env =
   | id ->
-    match mapLookup id env.llSolutions with Some argMap then
-      let argIds = mapKeys argMap.vars in
-      map
-        (lam id.
-          let s = nameGetStr id in
-          match mapLookup s env.topVarEnv with Some topLevelId then
-            nvar_ topLevelId
-          else
-            errorSingle [info]
-              (concat "Could not find top-level binding of parameter " (nameGetStr id)))
-        argIds
+    match mapLookup id env.llSolutions with Some sol then
+      map (lam x. nvar_ x.0) sol.vars
     else
       errorSingle [info]
         (concat "Could not find lambda lifted arguments for task " (nameGetStr id))

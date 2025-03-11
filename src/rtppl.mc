@@ -13,6 +13,7 @@ include "stdlib::mexpr/shallow-patterns.mc"
 include "stdlib::mexpr/type-check.mc"
 include "stdlib::ocaml/mcore.mc"
 include "stdlib::tuning/hole-cfa.mc"
+include "stdlib::mexpr/generate-utest.mc"
 
 include "coreppl::dppl-arg.mc"
 include "coreppl::infer-method.mc"
@@ -20,17 +21,12 @@ include "coreppl::parser.mc"
 include "coreppl::coreppl-to-mexpr/compile.mc"
 include "coreppl::coreppl-to-mexpr/runtimes.mc"
 
-let _rts = lam.
-  use LoadRuntime in
-  let _bpf = BPF {particles = int_ 1} in
-  let _bpfRtEntry = loadRuntimeEntry _bpf "smc-bpf/runtime.mc" in
-  combineInferRuntimes default (mapFromSeq cmpInferMethod [(_bpf, _bpfRtEntry)])
-
 lang ProbTimeCompileLang =
   ProbTimeLower + ProbTimeSym + ProbTimePrettyPrint +
   ProbTimeValidate + ProbTimeCodegen + RtpplPrettyPrint + ProbTimeJson +
 
-  DPPLParser + MExprLowerNestedPatterns + MExprTypeCheck + MCoreCompileLang
+  CPPLLoader + MExprAst + StripUtestLoader + MExprLowerNestedPatterns +
+  MCoreCompileLang
 
   sem buildProbTime : RtpplOptions -> PTProgram -> CompileResult -> ()
   sem buildProbTime options program =
@@ -47,9 +43,16 @@ lang ProbTimeCompileLang =
   sem buildTaskDppl : RtpplOptions -> String -> Expr -> ()
   sem buildTaskDppl options path =
   | taskAst ->
-    let runtimeData = _rts () in
-    let dpplOpts = {default with cps = "partial", extractSimplification = "inline"} in
-    let taskAst = mexprCompile dpplOpts runtimeData taskAst in
+    let loader = mkLoader symEnvDefault typcheckEnvDefault [StripUtestHook ()] in
+    let dpplOpts = {defaultArgs with cps = "partial", extractSimplification = "inline"} in
+    let loader = enableCPPLCompilation dpplOpts loader in
+    recursive let f = lam decls. lam ast.
+      match exprAsDecl ast with Some (decl, ast)
+      then f (snoc decls decl) ast
+      else snoc decls (decl_nulet_ (nameSym "") ast) in
+    match f [] taskAst with decls in
+    let loader = foldl _addDeclExn loader decls in
+    let taskAst = buildFullAst loader in
     buildTaskMExpr options path taskAst
 
   sem buildTaskMExpr : RtpplOptions -> String -> Expr -> ()
@@ -66,7 +69,6 @@ lang ProbTimeCompileLang =
       p.cleanup()
     in
     writeIntermediateMExprIf path taskAst options.debugCompileMExpr;
-    let taskAst = typeCheck taskAst in
     let taskAst = lowerAll taskAst in
     compileMCore taskAst (mkEmptyHooks compileOCaml)
 
